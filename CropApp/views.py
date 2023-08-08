@@ -20,7 +20,6 @@ class CropsCategoryViewSet(viewsets.ModelViewSet):
     queryset = CropsCategoryModel.objects.all()
     serializer_class = CropsCategorySerializer
     lookup_field = "id"
-    serializer_class = CropsCategorySerializer
 
 
 @extend_schema(tags=["Crops"])
@@ -37,23 +36,6 @@ class CropsViewSet(viewsets.ModelViewSet):
             return CropsRetrieveSerializer
         else:
             return CropsSerializer
-
-    @extend_schema(
-        parameters=set_query_params('list', [
-            {"name": 'category', "description": 'category id'},
-            {"name": 'is_archived', 'type': 'bool', 'required': False},
-            {'name': 'page', 'type': 'int', 'required': False},
-            {'name': 'page_size', 'type': 'int', 'required': False}
-        ])
-    )
-    def get(self, request, *args, **kwargs):
-        query_param = request.query_params.get("is_archived")
-        is_archived = bool_validator(query_param)
-        queryset = self.queryset
-        serializer = self.serializer_class
-        if query_param:
-            queryset = self.queryset.filter(is_archived=is_archived)
-        return Response(serializer(queryset, many=True).data, status=status.HTTP_200_OK)
 
     @extend_schema(
         examples=[
@@ -96,14 +78,18 @@ class CropsViewSet(viewsets.ModelViewSet):
     @extend_schema(
         parameters=set_query_params('list', [
             {"name": 'category', "description": 'category id'},
+            {'name': 'is_archived', 'type': 'bool', "description": 'Archived or not', 'required': False},
             {'name': 'page', 'type': 'int', 'required': False},
             {'name': 'page_size', 'type': 'int', 'required': False}
         ])
     )
     def list(self, request, *args, **kwargs):
+        is_archived = request.query_params.get("is_archived") == "true"
         category = request.query_params.get("category")
         if category:
             self.queryset = self.queryset.filter(category=category)
+        if 'is_archived' in request.query_params.keys():
+            self.queryset = self.queryset.filter(is_archived=is_archived)
         paginator = self.pagination_class()
         serializer_class = self.get_serializer_class()
         page = paginator.paginate_queryset(self.queryset, request)
@@ -194,7 +180,7 @@ class ArchiveManagerAPIView(CreateAPIView):
     )
     def post(self, request, *args, **kwargs):
         query_param = request.query_params.get("is_archived")
-        is_archived = bool_validator(query_param)
+        is_archived = bool_validator(query_param)[0]
         if query_param:
             crops_list = request.data.get("usercropsdiseases", [])
 
