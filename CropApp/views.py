@@ -12,11 +12,11 @@ from django.db import transaction
 from utils.validator import bool_validator
 from rest_framework.generics import CreateAPIView
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import MultiPartParser, FormParser
 
 
 @extend_schema(tags=["Crops Category"])
 class CropsCategoryViewSet(viewsets.ModelViewSet):
-
     queryset = CropsCategoryModel.objects.all()
     serializer_class = CropsCategorySerializer
     lookup_field = "id"
@@ -28,6 +28,7 @@ class CropsViewSet(viewsets.ModelViewSet):
     serializer_class = CropsSerializer
     lookup_field = "id"
     pagination_class = CustomPagination
+    # parser_classes = [MultiPartParser, FormParser]
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -52,21 +53,25 @@ class CropsViewSet(viewsets.ModelViewSet):
             )
         ],
     )
-    @transaction.atomic()
     def create(self, request, *args, **kwargs):
+        request.data._mutable = True
         diseases = request.data.pop("disease", None)
         diseases_list = []
         if diseases:
             for disease in diseases:
-                disease_serializer = DiseaseSerializer(data=disease)
-                if disease_serializer.is_valid(raise_exception=True):
-                    disease_obj = disease_serializer.save()
-                    if disease_obj.id not in diseases_list:
-                        diseases_list.append(disease_obj.id)
+                disease_title = disease.get("title", None)
+                disease_image = disease.get("image", None)
+                data = {
+                    "title": disease_title,
+                    "image": disease_image
+                }
+                disease_obj = DiseasesModel.objects.create(data)
+                if disease_obj.id not in diseases_list:
+                    diseases_list.append(disease_obj.id)
 
         # validate_data["image"] = validate_data["image"]
         request.data["disease"] = diseases_list if diseases_list else None
-        crops_serializer = self.serializer_class(data=request.data)
+        crops_serializer = CropsSerializer(data=request.data, files=request.FILES)
         if crops_serializer.is_valid(raise_exception=True):
             crops_obj = crops_serializer.save()
             crops_data = CropsListSerializer(crops_obj, many=False).data
@@ -112,21 +117,29 @@ class CropsViewSet(viewsets.ModelViewSet):
         if diseases:
             for disease in diseases:
                 disease_id = disease.pop('id', None)
+                disease_title = disease.get("title", None)
+                disease_image = disease.get("image", None)
                 if disease_id:
                     try:
                         disease_obj = DiseasesModel.objects.get(pk=disease_id)
                         if type(disease["image"]) == str:
-                            disease.pop('image')
-                        disease_serializer = DiseaseSerializer(
-                            data=disease, instance=disease_obj)
+                            disease_image = None
+                        if disease_image:
+                            DiseasesModel.objects.filter(pk=disease_id).update(
+                                title=disease_title, image=disease_image)
+                        else:
+                            DiseasesModel.objects.filter(pk=disease_id).update(title=disease_title)
+                        disease_obj = DiseasesModel.objects.get(pk=disease_id)
                     except Exception as e:
                         raise ValidationError(e)
                 else:
-                    disease_serializer = DiseaseSerializer(data=disease)
-                if disease_serializer.is_valid(raise_exception=True):
-                    disease_obj = disease_serializer.save()
-                    if disease_obj.id not in diseases_list:
-                        diseases_list.append(disease_obj.id)
+                    data = {
+                        "title": disease_title,
+                        "image": disease_image
+                    }
+                    disease_obj = DiseasesModel.objects.create(**data)
+                if disease_obj.id not in diseases_list:
+                    diseases_list.append(disease_obj.id)
 
         request.data["disease"] = diseases_list if diseases_list else None
         if type(request.data["image"]) == str:
@@ -136,7 +149,7 @@ class CropsViewSet(viewsets.ModelViewSet):
         if crops_serializer.is_valid(raise_exception=True):
             crops_obj = crops_serializer.save()
             crops_data = CropsListSerializer(crops_obj, many=False).data
-            crops_data["detail"] = "ফসল সফলভাবে তৈরি করা হয়েছে"
+            crops_data["detail"] = "ফসল সফলভাবে আপডেট  করা হয়েছে"
             return Response(data=crops_data, status=status.HTTP_200_OK)
         return Response(data={"detail": "ভুল তথ্য দেয়া হয়েছে, দয়া করে সঠিক তথ্য প্রদান করুন । "},
                         status=status.HTTP_400_BAD_REQUEST)
