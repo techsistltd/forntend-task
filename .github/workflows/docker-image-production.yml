@@ -32,7 +32,7 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_KEY }}
           script: |
-            cd ~/corbelbackend/
+            cd ~/taskbackend/
             docker compose pull
             docker compose up -d --build
-            docker exec corbelbackend python manage.py migrate
+            docker exec taskbackend python manage.py migrate

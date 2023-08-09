@@ -20,7 +20,7 @@
     }
   ],
   "applications": {
-    "corbelbackend": {
+    "taskbackend": {
       "type": "python",
       "path": "/code",
       "module": "core.wsgi",
